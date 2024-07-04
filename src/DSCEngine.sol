@@ -43,7 +43,7 @@ contract DSCEngine is ReentrancyGuard {
     //////////////////////
     uint256 private constant ADDITIONAL_FEED_PRECISION = 1e10;
     uint256 private constant PRECISION = 1e18;
-    uint256 private constant LIQUIDATION_THRESHOLD = 50; // 200% overcollateralized 
+    uint256 private constant LIQUIDATION_THRESHOLD = 50; // 200% overcollateralized
     uint256 private constant LIQUIDATION_PRECISION = 100;
     uint256 private constant MIN_HEALTH_FACTOR = 1;
 
@@ -148,7 +148,11 @@ contract DSCEngine is ReentrancyGuard {
     // Private & Internal View Functions  //
     ////////////////////////////////////////
 
-    function _getAccountInformation(address user) private view returns (uint256 totalDscMinted, uint256 collateralValueInUsd) {
+    function _getAccountInformation(address user)
+        private
+        view
+        returns (uint256 totalDscMinted, uint256 collateralValueInUsd)
+    {
         totalDscMinted = s_userToAmountDscMinted[user];
         collateralValueInUsd = getAccountCollateralValue(user);
     }
@@ -169,7 +173,7 @@ contract DSCEngine is ReentrancyGuard {
     // 2. Revert if they don't
     function _revertIfHealthFactorIsBroken(address user) internal view {
         uint256 userHealthFactor = _healthFactor(user);
-        if(userHealthFactor < MIN_HEALTH_FACTOR) {
+        if (userHealthFactor < MIN_HEALTH_FACTOR) {
             revert DSCEngine__BreaksHealthFactor(userHealthFactor);
         }
     }
@@ -179,7 +183,7 @@ contract DSCEngine is ReentrancyGuard {
     ////////////////////////////////////////
 
     function getAccountCollateralValue(address user) public view returns (uint256 totalCollateralValueInUsd) {
-        // loop through each collateral token, get the amount they have deposited, and map it to 
+        // loop through each collateral token, get the amount they have deposited, and map it to
         // the price, to get the USD value
         for (uint256 i = 0; i < s_collateralTokens.length; i++) {
             address token = s_collateralTokens[i];
@@ -191,7 +195,7 @@ contract DSCEngine is ReentrancyGuard {
 
     function getUsdValue(address token, uint256 amount) public view returns (uint256) {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_tokenToPriceFeed[token]);
-        (, int256 price, , , ) = priceFeed.latestRoundData();
+        (, int256 price,,,) = priceFeed.latestRoundData();
         // 1 ETH = $1000
         // The returned value from CL will be 1000 * 1e8 (from Chainlink priceFeed Addresses)
         return ((uint256(price) * ADDITIONAL_FEED_PRECISION) * amount) / PRECISION; // ((1000 * 1e8 * (1e10)) * 1000 * 1e18) / 1e18
