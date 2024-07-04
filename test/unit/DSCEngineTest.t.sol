@@ -23,7 +23,7 @@ contract DSCEngineTest is Test {
     function setUp() public {
         deployer = new DeployDSC();
         (dsc, dscEngine, helperConfig) = deployer.run();
-        (ethUsdPriceFeed, , weth, , ) = helperConfig.activeNetworkConfig();
+        (ethUsdPriceFeed,, weth,,) = helperConfig.activeNetworkConfig();
         ERC20Mock(weth).mint(USER, STARTING_ERC20_BALANCE);
     }
 
