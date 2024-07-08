@@ -41,7 +41,7 @@ contract DSCEngine is ReentrancyGuard {
     error DSCEngine__HealthFactorNotImproved();
 
 
-    ///////////////// ////
+    //////////////////////
     //  State Variables //
     //////////////////////
     uint256 private constant ADDITIONAL_FEED_PRECISION = 1e10;
