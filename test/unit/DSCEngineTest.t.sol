@@ -7,6 +7,7 @@ import {DecentralizedStableCoin} from "../../src/DecentralizedStableCoin.sol";
 import {DSCEngine} from "../../src/DSCEngine.sol";
 import {HelperConfig} from "../../script/HelperConfig.s.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/ERC20Mock.sol";
+import {MockFailedTransferFrom} from "../mocks/MockFailedTransferFrom.sol";
 
 contract DSCEngineTest is Test {
     DeployDSC deployer;
@@ -17,15 +18,19 @@ contract DSCEngineTest is Test {
     address btcUsdPriceFeed;
     address weth;
 
-    address public USER = makeAddr("user");
-    uint256 public constant AMOUNT_COLLATERAL = 10 ether;
-    uint256 public constant STARTING_ERC20_BALANCE = 10 ether;
+    address public user = address(1);
+    uint256 public amountCollateral = 10 ether;
+    
+    uint256 public constant STARTING_USER_BALANCE = 10 ether;
 
     function setUp() public {
         deployer = new DeployDSC();
         (dsc, dscEngine, helperConfig) = deployer.run();
         (ethUsdPriceFeed, btcUsdPriceFeed, weth,,) = helperConfig.activeNetworkConfig();
-        ERC20Mock(weth).mint(USER, STARTING_ERC20_BALANCE);
+        if(block.chainid == 31337) {
+            vm.deal(user, STARTING_USER_BALANCE);
+        }
+        ERC20Mock(weth).mint(user, STARTING_USER_BALANCE);
     }
     /////////////////////////
     //  Constructor Tests  //
@@ -67,9 +72,30 @@ contract DSCEngineTest is Test {
     //  Deposit Collateral Tests  //
     ////////////////////////////////
 
+    function testRevertsIfTransferFromFails() public {
+        // Arrange - Setup
+        address owner = msg.sender;
+        vm.startPrank(owner);
+        MockFailedTransferFrom mockDsc = new MockFailedTransferFrom();
+        tokenAddresses = [address(mockDsc)];
+        priceFeedAddresses = [ethUsdPriceFeed];
+        DSCEngine mockDscEngine = new DSCEngine(tokenAddresses, priceFeedAddresses, address(mockDsc));
+        mockDsc.mint(user, amountCollateral);
+        mockDsc.transferOwnership(address(mockDscEngine));
+        vm.stopPrank();
+
+        // Arrange - User
+        vm.startPrank(user);
+        ERC20Mock(address(mockDsc)).approve(address(mockDscEngine), amountCollateral);
+        // Act / Assert
+        vm.expectRevert(DSCEngine.DSCEngine__TransferFailed.selector);
+        mockDscEngine.depositCollateral(address(mockDsc), amountCollateral);
+        vm.stopPrank();
+    }
+
     function testRevertsIfCollateralIsZero() public {
-        vm.startPrank(USER);
-        ERC20Mock(weth).approve(address(dscEngine), AMOUNT_COLLATERAL);
+        vm.startPrank(user);
+        ERC20Mock(weth).approve(address(dscEngine), amountCollateral);
 
         vm.expectRevert(DSCEngine.DSCEngine__AmountMustBeMoreThanZero.selector);
         dscEngine.depositCollateral(weth, 0);
@@ -77,26 +103,26 @@ contract DSCEngineTest is Test {
     }
 
     function testRevertsWithUnapprovedCollateral() public {
-        ERC20Mock randToken = new ERC20Mock("RAN", "RAN", USER, AMOUNT_COLLATERAL);
-        vm.startPrank(USER);
+        ERC20Mock randToken = new ERC20Mock("RAN", "RAN", user, amountCollateral);
+        vm.startPrank(user);
         vm.expectRevert(DSCEngine.DSCEngine__TokenNotSupported.selector);
-        dscEngine.depositCollateral(address(randToken), AMOUNT_COLLATERAL);
+        dscEngine.depositCollateral(address(randToken), amountCollateral);
         vm.stopPrank();
     }
 
     modifier depositedCollateral() {
-        vm.startPrank(USER);
-        ERC20Mock(weth).approve(address(dscEngine), AMOUNT_COLLATERAL);
-        dscEngine.depositCollateral(weth, AMOUNT_COLLATERAL);
+        vm.startPrank(user);
+        ERC20Mock(weth).approve(address(dscEngine), amountCollateral);
+        dscEngine.depositCollateral(weth, amountCollateral);
         vm.stopPrank();
         _;
     }
 
     function testCanDepositCollateralAndGetAccountInfo() public depositedCollateral {
-        (uint256 totalDscMinted, uint256 collateralValueInUsd) = dscEngine.getAccountInformation(USER);
+        (uint256 totalDscMinted, uint256 collateralValueInUsd) = dscEngine.getAccountInformation(user);
         uint256 expectedTotalDscMinted = 0;
         uint256 expectedDepositAmount = dscEngine.getTokenAmountFromUsd(weth, collateralValueInUsd);
         assertEq(totalDscMinted, expectedTotalDscMinted);
-        assertEq(AMOUNT_COLLATERAL, expectedDepositAmount);
+        assertEq(amountCollateral, expectedDepositAmount);
     }
 }
