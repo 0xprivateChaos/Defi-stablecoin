@@ -50,11 +50,14 @@ contract DSCEngine is ReentrancyGuard {
     uint256 private constant LIQUIDATION_PRECISION = 100;
     uint256 private constant MIN_HEALTH_FACTOR = 1e18;
     uint256 private constant LIQUIDATION__BONUS = 10; // 10% bonus
-
+    
+    /// @dev Mapping of token address to price feed address
     mapping(address token => address priceFeed) private s_tokenToPriceFeed;
+    /// @dev Amount of collateral deposited by user
     mapping(address user => mapping(address token => uint256 amount)) private s_collateralDeposited;
+    /// @dev Amount of DSC minted by user
     mapping(address user => uint256 amountDscMinted) private s_userToAmountDscMinted;
-
+    /// @dev If we know exactly how many token we have, we could make this immutable!
     address[] private s_collateralTokens;
 
     DecentralizedStableCoin private immutable i_dsc;
@@ -148,7 +151,8 @@ contract DSCEngine is ReentrancyGuard {
         external
     {
         burnDsc(amountDscToBurn);
-        redeemCollateral(tokenCollateralAddress, amountCollateral);
+        _redeemCollateral(tokenCollateralAddress, amountCollateral, msg.sender, msg.sender);
+        _revertIfHealthFactorIsBroken(msg.sender);
     }
 
     /**
@@ -159,6 +163,7 @@ contract DSCEngine is ReentrancyGuard {
         public
         moreThanZero(amountCollateral)
         nonReentrant
+        isAllowedToken(tokenCollateralAddress)
     {
         _redeemCollateral(tokenCollateralAddress, amountCollateral, msg.sender, msg.sender);
         _revertIfHealthFactorIsBroken(msg.sender);
@@ -306,12 +311,12 @@ contract DSCEngine is ReentrancyGuard {
         for (uint256 i = 0; i < s_collateralTokens.length; i++) {
             address token = s_collateralTokens[i];
             uint256 amount = s_collateralDeposited[user][token];
-            totalCollateralValueInUsd += getUsdValue(token, amount);
+            totalCollateralValueInUsd += _getUsdValue(token, amount);
         }
         return totalCollateralValueInUsd;
     }
 
-    function getUsdValue(address token, uint256 amount) public view returns (uint256) {
+    function _getUsdValue(address token, uint256 amount) public view returns (uint256) {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(s_tokenToPriceFeed[token]);
         (, int256 price,,,) = priceFeed.latestRoundData();
         // 1 ETH = $1000
@@ -321,5 +326,9 @@ contract DSCEngine is ReentrancyGuard {
 
     function getAccountInformation(address user) external view returns (uint256 totalDscMinted, uint256 collateralValueInUsd) {
         (totalDscMinted, collateralValueInUsd) =  _getAccountInformation(user);
+    }
+
+    function getUsdValue(address token, uint256 amount) external view returns (uint256) {
+        return _getUsdValue(token, amount);
     }
 }

@@ -77,11 +77,11 @@ contract DSCEngineTest is Test {
     }
 
     function testRevertsWithUnapprovedCollateral() public {
-        ERC20Mock ranToken = new ERC20Mock("RAN", "RAN", USER, AMOUNT_COLLATERAL);
+        ERC20Mock randToken = new ERC20Mock("RAN", "RAN", USER, AMOUNT_COLLATERAL);
         vm.startPrank(USER);
-        
         vm.expectRevert(DSCEngine.DSCEngine__TokenNotSupported.selector);
-        dscEngine.depositCollateral(address(ranToken), AMOUNT_COLLATERAL);
+        dscEngine.depositCollateral(address(randToken), AMOUNT_COLLATERAL);
+        vm.stopPrank();
     }
 
     modifier depositedCollateral() {
