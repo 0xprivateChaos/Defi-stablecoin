@@ -125,4 +125,13 @@ contract DSCEngineTest is Test {
         assertEq(totalDscMinted, expectedTotalDscMinted);
         assertEq(amountCollateral, expectedDepositAmount);
     }
+
+    ////////////////////////////////////////
+    // depositCollateralAndMintDsc Tests  //
+    ////////////////////////////////////////
+
+    function testRevertsIfMintedDscBreaksHealthFactor() public {
+
+    }
+
 }

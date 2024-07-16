@@ -23,7 +23,7 @@ import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/interfaces/Ag
  *
  * Our DSC system should always be "overcollateralized". At no point, should the value of all collateral <= the $ backed value of all the DSC.
  *
- * @notice This contract is the core of the DSC system. It handles all the logic for minting and redeemin DSC, as well as depositing and withdrawing collateral.
+ * @notice This contract is the core of the DSC system. It handles all the logic for minting and redeeming DSC, as well as depositing and withdrawing collateral.
  * @notice This contract is VERY loosely based on the MakerDao DSS (DAI) system.
  */
 contract DSCEngine is ReentrancyGuard {
