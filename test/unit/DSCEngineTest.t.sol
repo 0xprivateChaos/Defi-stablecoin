@@ -10,8 +10,11 @@ import {ERC20Mock} from "@openzeppelin/contracts/mocks/ERC20Mock.sol";
 import {MockFailedTransferFrom} from "../mocks/MockFailedTransferFrom.sol";
 import {MockV3Aggregator} from "../mocks/MockV3Aggregator.sol";
 import {MockFailedMintDSC} from "../mocks/MockFailedMintDSC.sol";
+import {MockFailedTransfer} from "../mocks/MockFailedTransfer.sol";
 
 contract DSCEngineTest is Test {
+    event CollateralRedeemed(address indexed redeemedFrom, address indexed redeemedTo, address indexed token, uint256 amount);
+
     DeployDSC deployer;
     DecentralizedStableCoin dsc;
     DSCEngine dscEngine;
@@ -181,7 +184,6 @@ contract DSCEngineTest is Test {
         vm.expectRevert(DSCEngine.DSCEngine__MintFailed.selector);
         mockDscEngine.mintDsc(amountToMint);
         vm.stopPrank();
-
     }
 
     function testRevertsIfDscMintAmountBreaksHealthFactor() public depositedCollateral {
@@ -242,6 +244,84 @@ contract DSCEngineTest is Test {
         vm.stopPrank();
     }
 
+    //////////////////////////////
+    //  redeemCollateral Tests  //
+    //////////////////////////////
+
+    function testRevertsIfTransferFails() public {
+        // Arrange - Setup
+        MockFailedTransfer mockDsc = new MockFailedTransfer();
+        tokenAddresses = [address(mockDsc)];
+        priceFeedAddresses = [ethUsdPriceFeed];
+        DSCEngine mockDscEngine = new DSCEngine(tokenAddresses, priceFeedAddresses, address(mockDsc));
+        mockDsc.mint(user, amountCollateral);
+        mockDsc.transferOwnership(address(mockDscEngine));
+
+        // Arrange - User
+        vm.startPrank(user);
+        ERC20Mock(address(mockDsc)).approve(address(mockDscEngine), amountCollateral);
+        mockDscEngine.depositCollateral(address(mockDsc), amountCollateral);
+        
+        // Act / Assert
+        vm.expectRevert(DSCEngine.DSCEngine__TransferFailed.selector);
+        mockDscEngine.redeemCollateral(address(mockDsc), amountCollateral);
+        vm.stopPrank();
+    }
+
+    function testRevertsIfRedeemAmountIsZero() public {
+        vm.startPrank(user);
+        ERC20Mock(weth).approve(address(dscEngine), amountCollateral);
+        dscEngine.depositCollateralAndMintDsc(weth, amountCollateral, amountToMint);
+        vm.expectRevert(DSCEngine.DSCEngine__AmountMustBeMoreThanZero.selector);
+        dscEngine.redeemCollateral(weth, 0);
+        vm.stopPrank();
+    }
+
+    function testRedeemCollateralUpdatesBalanceCorrectly() public {
+        vm.startPrank(user);
+        ERC20Mock(weth).approve(address(dscEngine), amountCollateral);
+        dscEngine.depositCollateralAndMintDsc(weth, amountCollateral, amountToMint);  
+        uint256 amountToRedeem = amountCollateral / 2;
+        dscEngine.redeemCollateral(weth, amountToRedeem);      
+        uint256 remainingCollateral = dscEngine.getCollateralBalanceOfUser(user, weth);
+        assertEq(remainingCollateral, amountCollateral - amountToRedeem);
+        vm.stopPrank();
+    }
+
+    function testEmitCollateralRedeemedWithCorrectlyArgs() public depositedCollateral {
+        vm.startPrank(user);
+        vm.expectEmit(true, true, true, true, address(dscEngine));
+        emit CollateralRedeemed(user, user, weth, amountCollateral);
+        dscEngine.redeemCollateral(weth, amountCollateral);
+        vm.stopPrank();
+    }
+
+    ////////////////////////////////////
+    //  redeemCollateralForDSC Tests  //
+    ////////////////////////////////////
+
+    function testMustRedeemMoreThanZero() public {
+        vm.startPrank(user);
+        ERC20Mock(weth).approve(address(dscEngine), amountCollateral);
+        dscEngine.depositCollateralAndMintDsc(weth, amountCollateral, amountToMint);
+        dsc.approve(address(dscEngine), amountToMint);
+        vm.expectRevert(DSCEngine.DSCEngine__AmountMustBeMoreThanZero.selector);
+        dscEngine.redeemCollateralForDsc(weth, 0, amountToMint);
+        vm.stopPrank();
+    }
+
+    function testCanRedeemDepositedCollateralForDsc() public {
+        vm.startPrank(user);
+        ERC20Mock(weth).approve(address(dscEngine), amountCollateral);
+        dscEngine.depositCollateralAndMintDsc(weth, amountCollateral, amountToMint);
+        dsc.approve(address(dscEngine), amountToMint);
+        dscEngine.redeemCollateralForDsc(weth, amountCollateral, amountToMint);
+        vm.stopPrank();
+
+        uint256 userBalance = dsc.balanceOf(user);
+        assertEq(userBalance, 0);
+    }
+
     ///////////////////////////
     //  Health Factor Tests  //
     ///////////////////////////
@@ -254,9 +334,5 @@ contract DSCEngineTest is Test {
         assertEq(healthFactor, expectedHealthFactor, "Health factor should be max for zero DSC minted.");
     }
 
-    //////////////////////////////
-    //  redeemCollateral Tests  //
-    //////////////////////////////
 
-    
 }
