@@ -9,6 +9,7 @@ import {HelperConfig} from "../../script/HelperConfig.s.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/ERC20Mock.sol";
 import {MockFailedTransferFrom} from "../mocks/MockFailedTransferFrom.sol";
 import {MockV3Aggregator} from "../mocks/MockV3Aggregator.sol";
+import {MockFailedMintDSC} from "../mocks/MockFailedMintDSC.sol";
 
 contract DSCEngineTest is Test {
     DeployDSC deployer;
@@ -21,7 +22,7 @@ contract DSCEngineTest is Test {
 
     address public user = address(1);
     uint256 public amountCollateral = 10 ether;
-    uint256 public amountToMint = 10 ether;
+    uint256 public amountToMint = 100 ether;
     
     uint256 public constant STARTING_USER_BALANCE = 10 ether;
 
@@ -163,7 +164,83 @@ contract DSCEngineTest is Test {
     //    mintDsc Tests    //
     /////////////////////////
 
-    
+    function testRevertsIfMintFails() public {
+        // Arrange - Setup
+        MockFailedMintDSC mockDsc = new MockFailedMintDSC();
+        tokenAddresses = [weth];
+        priceFeedAddresses = [ethUsdPriceFeed];
+        DSCEngine mockDscEngine = new DSCEngine(tokenAddresses, priceFeedAddresses, address(mockDsc));
+        mockDsc.transferOwnership(address(mockDscEngine));
+
+        // Arrange - User
+        vm.startPrank(user);
+        ERC20Mock(weth).approve(address(mockDscEngine), amountCollateral);
+        mockDscEngine.depositCollateral(weth, amountCollateral);
+        
+        // Act / Assert
+        vm.expectRevert(DSCEngine.DSCEngine__MintFailed.selector);
+        mockDscEngine.mintDsc(amountToMint);
+        vm.stopPrank();
+
+    }
+
+    function testRevertsIfDscMintAmountBreaksHealthFactor() public depositedCollateral {
+        (, int256 price,,,) = MockV3Aggregator(ethUsdPriceFeed).latestRoundData();
+        amountToMint = amountCollateral * (uint256(price) * 1e10) / 1e18;
+        vm.startPrank(user);
+        uint256 expectedHealthFactor = dscEngine.calculateHealthFactor(amountToMint, dscEngine.getUsdValue(weth, amountCollateral));
+        vm.expectRevert(abi.encodeWithSelector(DSCEngine.DSCEngine__BreaksHealthFactor.selector, expectedHealthFactor));
+        dscEngine.mintDsc(amountToMint);
+        vm.stopPrank();         
+    }
+
+    function testRevertsIfDscMintAmountIsZero() public {
+        vm.startPrank(user);
+        ERC20Mock(weth).approve(address(dscEngine), amountCollateral);
+        dscEngine.depositCollateralAndMintDsc(weth, amountCollateral, amountToMint);
+        vm.expectRevert(DSCEngine.DSCEngine__AmountMustBeMoreThanZero.selector);    
+        dscEngine.mintDsc(0);
+        vm.stopPrank();
+    }
+
+    function testCanMintDsc() public depositedCollateral {
+        vm.startPrank(user);
+        uint256 expectedTotalDscMinted = amountToMint;
+        dscEngine.mintDsc(amountToMint);
+        (uint256 totalDscMinted,) = dscEngine.getAccountInformation(user);
+        assertEq(totalDscMinted, expectedTotalDscMinted);
+    }
+
+    /////////////////////////
+    //    burnDsc Tests    //
+    /////////////////////////
+
+    function testRevertsIfDscBurnAmountIsZero() public {
+        vm.startPrank(user);
+        ERC20Mock(weth).approve(address(dscEngine), amountCollateral);
+        dscEngine.depositCollateralAndMintDsc(weth, amountCollateral, amountToMint);
+        vm.expectRevert(DSCEngine.DSCEngine__AmountMustBeMoreThanZero.selector);
+        dscEngine.burnDsc(0);
+        vm.stopPrank();
+    }
+
+    function testCantBurnMoreThanUserHas() public {
+        vm.prank(user);
+        vm.expectRevert();
+        dscEngine.burnDsc(1);
+    }
+
+    function testCanBurnDsc() public {
+        vm.startPrank(user);
+        ERC20Mock(weth).approve(address(dscEngine), amountCollateral);
+        dscEngine.depositCollateralAndMintDsc(weth, amountCollateral, amountToMint);
+        uint256 burnAmount = amountToMint / 2;
+        dsc.approve(address(dscEngine), burnAmount);
+        dscEngine.burnDsc(burnAmount);
+        (uint256 totalDscMinted,) = dscEngine.getAccountInformation(user);
+        assertEq(totalDscMinted, amountToMint - burnAmount);    
+        vm.stopPrank();
+    }
 
     ///////////////////////////
     //  Health Factor Tests  //
@@ -176,4 +253,10 @@ contract DSCEngineTest is Test {
         uint256 healthFactor = dscEngine.calculateHealthFactor(totalDscMinted, collateralValueInUsd);
         assertEq(healthFactor, expectedHealthFactor, "Health factor should be max for zero DSC minted.");
     }
+
+    //////////////////////////////
+    //  redeemCollateral Tests  //
+    //////////////////////////////
+
+    
 }
