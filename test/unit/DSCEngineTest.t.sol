@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, console} from "forge-std/Test.sol";
 import {DeployDSC} from "../../script/DeployDSC.s.sol";
 import {DecentralizedStableCoin} from "../../src/DecentralizedStableCoin.sol";
 import {DSCEngine} from "../../src/DSCEngine.sol";
@@ -145,18 +145,35 @@ contract DSCEngineTest is Test {
     }
 
     function testCanDepositCollateralAndMintDscSuccessfully() public {
-    vm.startPrank(user);
-    ERC20Mock(weth).approve(address(dscEngine), amountCollateral);
-    dscEngine.depositCollateralAndMintDsc(weth, amountCollateral, amountToMint);
+        vm.startPrank(user);
+        ERC20Mock(weth).approve(address(dscEngine), amountCollateral);
+        dscEngine.depositCollateralAndMintDsc(weth, amountCollateral, amountToMint);
 
-    // Verify collateral deposit
-    (uint256 totalDscMinted, uint256 collateralValueInUsd) = dscEngine.getAccountInformation(user);
-    uint256 expectedDepositAmount = dscEngine.getTokenAmountFromUsd(weth, collateralValueInUsd);
-    assertEq(amountCollateral, expectedDepositAmount);
+        // Verify collateral deposit
+        (uint256 totalDscMinted, uint256 collateralValueInUsd) = dscEngine.getAccountInformation(user);
+        uint256 expectedDepositAmount = dscEngine.getTokenAmountFromUsd(weth, collateralValueInUsd);
+        assertEq(amountCollateral, expectedDepositAmount);
 
-    // Verify DSC minting
-    assertEq(totalDscMinted, amountToMint);
-    vm.stopPrank();
-}
+        // Verify DSC minting
+        assertEq(totalDscMinted, amountToMint);
+        vm.stopPrank();
+    }
 
+    /////////////////////////
+    //    mintDsc Tests    //
+    /////////////////////////
+
+    
+
+    ///////////////////////////
+    //  Health Factor Tests  //
+    ///////////////////////////
+
+    function testCalculateHealthFactorWithZeroDscMinted() public view {
+        uint256 totalDscMinted = 0;
+        uint256 collateralValueInUsd = 1000 * 1e18; // $1000
+        uint256 expectedHealthFactor = type(uint256).max; // Infinity or max uint256
+        uint256 healthFactor = dscEngine.calculateHealthFactor(totalDscMinted, collateralValueInUsd);
+        assertEq(healthFactor, expectedHealthFactor, "Health factor should be max for zero DSC minted.");
+    }
 }
