@@ -454,4 +454,8 @@ contract DSCEngineTest is Test {
         assertEq(collateralValueInUsd, expectedUserCollateralValueInUsd);
     }
 
+    function testUserHasNoMoreDebt() public liquidated {
+        (uint256 userDscMinted, ) = dscEngine.getAccountInformation(user);
+        assertEq(userDscMinted, 0);
+    }
 }
