@@ -23,6 +23,7 @@ contract DSCEngineTest is Test {
     address ethUsdPriceFeed;
     address btcUsdPriceFeed;
     address weth;
+    address wbtc;
 
     address public user = address(1);
     uint256 public amountCollateral = 10 ether;
@@ -37,11 +38,12 @@ contract DSCEngineTest is Test {
     function setUp() public {
         deployer = new DeployDSC();
         (dsc, dscEngine, helperConfig) = deployer.run();
-        (ethUsdPriceFeed, btcUsdPriceFeed, weth,,) = helperConfig.activeNetworkConfig();
+        (ethUsdPriceFeed, btcUsdPriceFeed, weth, wbtc,) = helperConfig.activeNetworkConfig();
         if(block.chainid == 31337) {
             vm.deal(user, STARTING_USER_BALANCE);
         }
         ERC20Mock(weth).mint(user, STARTING_USER_BALANCE);
+        ERC20Mock(wbtc).mint(user, STARTING_USER_BALANCE);
     }
     /////////////////////////
     //  Constructor Tests  //
@@ -221,7 +223,7 @@ contract DSCEngineTest is Test {
     /////////////////////////
     //    burnDsc Tests    //
     /////////////////////////
-
+    
     function testRevertsIfDscBurnAmountIsZero() public {
         vm.startPrank(user);
         ERC20Mock(weth).approve(address(dscEngine), amountCollateral);
@@ -457,5 +459,21 @@ contract DSCEngineTest is Test {
     function testUserHasNoMoreDebt() public liquidated {
         (uint256 userDscMinted, ) = dscEngine.getAccountInformation(user);
         assertEq(userDscMinted, 0);
+    }
+
+    ////////////////////////////////
+    // View & Pure Function Tests //
+    ////////////////////////////////
+
+    function testGetAccountCollateralValue() public {
+        vm.startPrank(user);
+        ERC20Mock(weth).approve(address(dscEngine), amountCollateral);
+        dscEngine.depositCollateral(weth, amountCollateral);
+        ERC20Mock(wbtc).approve(address(dscEngine), amountCollateral);
+        dscEngine.depositCollateral(wbtc, amountCollateral);
+        vm.stopPrank();
+        uint256 totalCollateralValueInUsd = dscEngine.getAccountCollateralValue(user);
+        uint256 expectedCollateralValue = dscEngine.getUsdValue(weth, amountCollateral) + dscEngine.getUsdValue(wbtc, amountCollateral);
+        assertEq(totalCollateralValueInUsd, expectedCollateralValue);
     }
 }
