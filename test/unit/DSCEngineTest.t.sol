@@ -223,7 +223,7 @@ contract DSCEngineTest is Test {
     /////////////////////////
     //    burnDsc Tests    //
     /////////////////////////
-    
+
     function testRevertsIfDscBurnAmountIsZero() public {
         vm.startPrank(user);
         ERC20Mock(weth).approve(address(dscEngine), amountCollateral);
