@@ -4,6 +4,9 @@ out = "out"
 libs = ["lib"]
 remappings=["@chainlink/contracts=lib/chainlink-brownie-contracts/contracts","@openzeppelin/contracts=lib/openzeppelin-contracts/contracts"]
 
+[fuzz]
+seed = "0x1"
+
 [invariant]
 runs = 128
 depth = 128
